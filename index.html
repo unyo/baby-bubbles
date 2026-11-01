@@ -17,6 +17,8 @@
   #go::after { content: ""; position: absolute; left: 38%; top: 50%; transform: translateY(-50%); border-style: solid; border-width: 11vmin 0 11vmin 17vmin; border-color: transparent transparent transparent #fff; }
   @keyframes pulse { 50% { transform: scale(1.08); } }
   #start p { margin: 0; font-size: 15px; opacity: .8; max-width: 300px; line-height: 1.4; }
+  #grownups { border: 1px solid rgba(255,255,255,.5); background: rgba(255,255,255,.12); color: #fff; font: 600 14px -apple-system, system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; }
+  #grownups[hidden] { display: none; }
   #hl { position: fixed; left: 0; top: 0; opacity: 0.01; pointer-events: none; transform: scale(0.1); }
 </style>
 </head>
@@ -26,6 +28,7 @@
 <div id="start">
   <button id="go" aria-label="Start"></button>
   <p>Grown-up: tap to start (this enables sound and motion). Turn off silent mode and keep a firm grip. Triple-click the side button for Guided Access to lock the screen.</p>
+  <button id="grownups" hidden>Grown-ups: more animals</button>
 </div>
 
 <script>
@@ -125,13 +128,28 @@
   let hue = 220, flash = 0, look = { x: W / 2, y: H / 2 };
   let started = false;
 
+  // Bears are always there. The other animals show up once unlocked
+  // (window.setFriendsUnlocked is called by the Expo app after a purchase).
+  const FRIENDS = ['cat', 'bunny', 'frog', 'pig', 'chick'];
+  let friendsUnlocked = /[?&]friends=1/.test(location.search);
+  function pickKind() {
+    if (!friendsUnlocked || Math.random() < 0.25) return 'bear';
+    return FRIENDS[Math.floor(Math.random() * FRIENDS.length)];
+  }
+  window.setFriendsUnlocked = on => {
+    const was = friendsUnlocked;
+    friendsUnlocked = !!on;
+    if (friendsUnlocked && !was) bubbles.forEach(b => { b.kind = pickKind(); });
+    if (!friendsUnlocked) bubbles.forEach(b => { b.kind = 'bear'; });
+  };
+
   function newBubble(fromBottom = false) {
     const r = Math.min(W, H) * (0.1 + Math.random() * 0.1);
     return {
       x: r + Math.random() * (W - 2 * r),
       y: fromBottom ? H + r + Math.random() * 100 : Math.random() * H,
       r, vx: (Math.random() - 0.5) * 0.4, vy: -(0.3 + Math.random() * 0.5),
-      hue: Math.random() * 360, ph: Math.random() * 6.28
+      hue: Math.random() * 360, ph: Math.random() * 6.28, kind: pickKind()
     };
   }
   for (let i = 0; i < 8; i++) bubbles.push(newBubble());
@@ -260,46 +278,110 @@
     }
     ctx.closePath();
   }
+  function circle(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill(); }
+  function oval(x, y, rx, ry, rot = 0) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, rot, 0, 6.283); ctx.fill(); }
+  function tri(ax, ay, bx, by, cx, cy) { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.lineTo(cx, cy); ctx.closePath(); ctx.fill(); }
+  function smile(y, w, r) {
+    ctx.strokeStyle = '#222'; ctx.lineWidth = Math.max(3, r * 0.05); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(0, y, w, 0.3, Math.PI - 0.3); ctx.stroke();
+  }
+
+  // Things drawn behind the round body (ears, tufts).
+  const BACK = {
+    bear(r, dark, light) {
+      for (const s of [-1, 1]) { ctx.fillStyle = dark; circle(s * r * 0.72, -r * 0.72, r * 0.32); ctx.fillStyle = light; circle(s * r * 0.72, -r * 0.72, r * 0.17); }
+    },
+    cat(r, dark, light) {
+      for (const s of [-1, 1]) {
+        ctx.fillStyle = dark; tri(s * r * 0.25, -r * 0.85, s * r * 0.95, -r * 0.35, s * r * 0.85, -r * 1.15);
+        ctx.fillStyle = light; tri(s * r * 0.4, -r * 0.8, s * r * 0.82, -r * 0.5, s * r * 0.78, -r * 0.98);
+      }
+    },
+    bunny(r, dark, light) {
+      for (const s of [-1, 1]) { ctx.fillStyle = dark; oval(s * r * 0.38, -r * 1.05, r * 0.22, r * 0.55, s * 0.18); ctx.fillStyle = light; oval(s * r * 0.38, -r * 1.02, r * 0.11, r * 0.4, s * 0.18); }
+    },
+    frog(r, dark) {
+      for (const s of [-1, 1]) { ctx.fillStyle = dark; circle(s * r * 0.45, -r * 0.72, r * 0.32); }
+    },
+    pig(r, dark, light) {
+      for (const s of [-1, 1]) { ctx.fillStyle = dark; tri(s * r * 0.35, -r * 0.88, s * r * 0.9, -r * 0.5, s * r * 0.82, -r * 1.05); }
+    },
+    chick(r, dark) {
+      ctx.fillStyle = dark;
+      for (const a of [-0.35, 0, 0.35]) oval(Math.sin(a) * r * 0.9, -r * 1.02, r * 0.09, r * 0.22, a);
+    },
+  };
+
+  function eyes(b, r, t, ex, ey, size) {
+    const dx = look.x - b.x, dy = look.y - b.y, d = Math.hypot(dx, dy) || 1;
+    const ox = (dx / d) * r * 0.05, oy = (dy / d) * r * 0.05;
+    const blink = (Math.sin(t / 1300 + b.ph * 3) > 0.985) ? 0.15 : 1;
+    ctx.fillStyle = '#fff';
+    for (const s of [-1, 1]) oval(s * ex, ey, r * 0.17 * size, r * 0.19 * size * blink);
+    ctx.fillStyle = '#222';
+    for (const s of [-1, 1]) oval(s * ex + ox, ey + oy, r * 0.08 * size, r * 0.09 * size * blink);
+  }
+
+  // Face drawn on top of the body.
+  const FACE = {
+    bear(b, r, t) {
+      eyes(b, r, t, r * 0.3, -r * 0.1, 1);
+      ctx.fillStyle = 'rgba(255,255,255,.8)'; oval(0, r * 0.3, r * 0.32, r * 0.24);
+      ctx.fillStyle = '#222'; oval(0, r * 0.2, r * 0.1, r * 0.07);
+      smile(r * 0.27, r * 0.14, r);
+    },
+    cat(b, r, t) {
+      eyes(b, r, t, r * 0.32, -r * 0.08, 1);
+      ctx.fillStyle = '#ff8fb1'; tri(-r * 0.09, r * 0.14, r * 0.09, r * 0.14, 0, r * 0.25);
+      smile(r * 0.24, r * 0.1, r);
+      ctx.strokeStyle = 'rgba(40,40,40,.7)'; ctx.lineWidth = Math.max(2, r * 0.025);
+      for (const s of [-1, 1]) for (const k of [-1, 0, 1]) {
+        ctx.beginPath(); ctx.moveTo(s * r * 0.22, r * 0.22 + k * r * 0.06); ctx.lineTo(s * r * 0.7, r * 0.16 + k * r * 0.12); ctx.stroke();
+      }
+    },
+    bunny(b, r, t) {
+      eyes(b, r, t, r * 0.3, -r * 0.12, 1);
+      ctx.fillStyle = '#ff8fb1'; oval(0, r * 0.15, r * 0.09, r * 0.06);
+      smile(r * 0.2, r * 0.12, r);
+      ctx.fillStyle = '#fff'; ctx.fillRect(-r * 0.09, r * 0.3, r * 0.08, r * 0.13); ctx.fillRect(r * 0.01, r * 0.3, r * 0.08, r * 0.13);
+      ctx.fillStyle = 'rgba(255,120,160,.35)'; for (const s of [-1, 1]) oval(s * r * 0.55, r * 0.22, r * 0.13, r * 0.08);
+    },
+    frog(b, r, t) {
+      eyes(b, r, t, r * 0.45, -r * 0.72, 1.25);
+      ctx.strokeStyle = '#222'; ctx.lineWidth = Math.max(3, r * 0.05); ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(0, r * 0.0, r * 0.5, 0.45, Math.PI - 0.45); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,120,160,.4)'; for (const s of [-1, 1]) oval(s * r * 0.6, r * 0.15, r * 0.13, r * 0.08);
+    },
+    pig(b, r, t) {
+      eyes(b, r, t, r * 0.32, -r * 0.18, 1);
+      ctx.fillStyle = '#ffb3cc'; oval(0, r * 0.22, r * 0.3, r * 0.2);
+      ctx.fillStyle = '#c2577a'; for (const s of [-1, 1]) oval(s * r * 0.1, r * 0.22, r * 0.05, r * 0.08);
+      smile(r * 0.38, r * 0.12, r);
+    },
+    chick(b, r, t) {
+      eyes(b, r, t, r * 0.3, -r * 0.12, 1);
+      ctx.fillStyle = '#ff9f1c'; tri(-r * 0.15, r * 0.12, r * 0.15, r * 0.12, 0, r * 0.35);
+      ctx.fillStyle = 'rgba(255,120,160,.4)'; for (const s of [-1, 1]) oval(s * r * 0.55, r * 0.2, r * 0.13, r * 0.08);
+    },
+  };
+
   function drawBubble(b, t) {
+    const r = b.r, kind = FACE[b.kind] ? b.kind : 'bear';
     const wob = 1 + Math.sin(t / 400 + b.ph) * 0.03;
     ctx.save();
     ctx.translate(b.x, b.y);
     ctx.scale(wob, 1 / wob);
-    // bear ears
-    for (const s of [-1, 1]) {
-      ctx.fillStyle = `hsl(${b.hue},90%,55%)`;
-      ctx.beginPath(); ctx.arc(s * b.r * 0.72, -b.r * 0.72, b.r * 0.32, 0, 6.283); ctx.fill();
-      ctx.fillStyle = `hsl(${b.hue},100%,85%)`;
-      ctx.beginPath(); ctx.arc(s * b.r * 0.72, -b.r * 0.72, b.r * 0.17, 0, 6.283); ctx.fill();
-    }
-    const g = ctx.createRadialGradient(-b.r * 0.3, -b.r * 0.35, b.r * 0.1, 0, 0, b.r);
+    BACK[kind](r, `hsl(${b.hue},90%,55%)`, `hsl(${b.hue},100%,85%)`);
+    const g = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.1, 0, 0, r);
     g.addColorStop(0, `hsla(${b.hue},100%,88%,.95)`);
     g.addColorStop(1, `hsla(${b.hue},95%,60%,.85)`);
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(0, 0, b.r, 0, 6.283); ctx.fill();
+    circle(0, 0, r);
     ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.stroke();
-    // face
-    const dx = look.x - b.x, dy = look.y - b.y, d = Math.hypot(dx, dy) || 1;
-    const ox = (dx / d) * b.r * 0.05, oy = (dy / d) * b.r * 0.05;
-    const blink = (Math.sin(t / 1300 + b.ph * 3) > 0.985) ? 0.15 : 1;
-    ctx.fillStyle = '#fff';
-    for (const s of [-1, 1]) {
-      ctx.beginPath(); ctx.ellipse(s * b.r * 0.3, -b.r * 0.1, b.r * 0.17, b.r * 0.19 * blink, 0, 0, 6.283); ctx.fill();
-    }
-    ctx.fillStyle = '#222';
-    for (const s of [-1, 1]) {
-      ctx.beginPath(); ctx.ellipse(s * b.r * 0.3 + ox, -b.r * 0.1 + oy, b.r * 0.08, b.r * 0.09 * blink, 0, 0, 6.283); ctx.fill();
-    }
-    // snout + nose
-    ctx.fillStyle = 'rgba(255,255,255,.8)';
-    ctx.beginPath(); ctx.ellipse(0, b.r * 0.3, b.r * 0.32, b.r * 0.24, 0, 0, 6.283); ctx.fill();
-    ctx.fillStyle = '#222';
-    ctx.beginPath(); ctx.ellipse(0, b.r * 0.2, b.r * 0.1, b.r * 0.07, 0, 0, 6.283); ctx.fill();
-    ctx.strokeStyle = '#222'; ctx.lineWidth = Math.max(3, b.r * 0.05); ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.arc(0, b.r * 0.27, b.r * 0.14, 0.3, Math.PI - 0.3); ctx.stroke();
+    FACE[kind](b, r, t);
     // highlight
     ctx.fillStyle = 'rgba(255,255,255,.55)';
-    ctx.beginPath(); ctx.ellipse(-b.r * 0.5, -b.r * 0.55, b.r * 0.14, b.r * 0.08, -0.7, 0, 6.283); ctx.fill();
+    oval(-r * 0.5, -r * 0.55, r * 0.14, r * 0.08, -0.7);
     ctx.restore();
   }
 
@@ -379,6 +461,14 @@
     started = true;
     await p;
   });
+  // Only the Expo app can sell the animal unlock; it shows its own grown-up check.
+  const gu = document.getElementById('grownups');
+  if (nativeBridge) {
+    gu.hidden = false;
+    gu.addEventListener('click', () => {
+      try { nativeBridge.postMessage(JSON.stringify({ type: 'grownups' })); } catch (e) {}
+    });
+  }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       try { if (started && navigator.wakeLock) navigator.wakeLock.request('screen'); } catch (e) {}

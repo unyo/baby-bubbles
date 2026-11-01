@@ -49,3 +49,22 @@ eas submit -p ios              # uploads to App Store Connect / TestFlight
 build always ships the current game. The bundle ID is `com.unyo.babybubbles`
 in `app.json`; change it before the first build if you want a different one.
 Build numbers increase automatically (`eas.json`).
+
+## Animal unlock (in-app purchase)
+
+Bears are free. A one-time purchase unlocks a cat, bunny, frog, pig and chick.
+The "Grown-ups: more animals" button on the start screen opens a parental gate
+(a times-table question), then the unlock and Restore Purchase buttons.
+
+In App Store Connect:
+
+1. Accept the Paid Apps agreement and fill in banking and tax info.
+2. Under the app, add an In-App Purchase of type **Non-Consumable** with
+   product ID `com.unyo.babybubbles.friends` (see `store.js`), a $4.99 price,
+   a display name, and a review screenshot of the unlock screen.
+3. Attach the purchase to your first app version when you submit it.
+
+To test purchases, use a TestFlight build or a development build
+(`eas build --profile preview`); Expo Go has no store. In Expo Go the unlock
+screen shows a "Preview animals" button instead so you can see them.
+In a browser, add `?friends=1` to the URL to preview the animals.
