@@ -43,11 +43,19 @@
   addEventListener('resize', resize); resize();
 
   // ---------- haptics ----------
+  // Inside the Expo app the page runs in a WebView and the native side plays
+  // real haptics (expo-haptics). In a browser we fall back to the switch-click
+  // trick on iOS and navigator.vibrate on Android.
+  const nativeBridge = window.ReactNativeWebView;
   let lastBuzz = 0;
-  function buzz(count = 1, gap = 70) {
+  function buzz(count = 1, gap = 70, kind = 'tap') {
     const now = performance.now();
     if (now - lastBuzz < 35) return;
     lastBuzz = now;
+    if (nativeBridge) {
+      try { nativeBridge.postMessage(JSON.stringify({ type: 'haptic', kind, count, gap })); } catch (e) {}
+      return;
+    }
     for (let i = 0; i < count; i++) {
       setTimeout(() => {
         try { hl.click(); } catch (e) {}
@@ -149,7 +157,7 @@
     burst(b.x, b.y, 22, b.hue, 6);
     ripple(b.x, b.y, b.hue);
     tone(SCALE[Math.floor(Math.random() * SCALE.length)], 0.7, 'sine', 0.26);
-    buzz(1);
+    buzz(1, 70, 'pop');
     setTimeout(() => bubbles.push(newBubble(true)), 700);
   }
 
@@ -192,7 +200,7 @@
       const i = Math.min(SCALE.length - 1, Math.floor((e.clientX / W) * SCALE.length));
       tone(SCALE[i] / 2 * (e.clientY < H / 2 ? 2 : 1), 0.35, 'sine', 0.12);
     }
-    if (now - lastTrailBuzz > 160) { lastTrailBuzz = now; buzz(1); }
+    if (now - lastTrailBuzz > 160) { lastTrailBuzz = now; buzz(1, 70, 'trail'); }
     const b = hitBubble(e.clientX, e.clientY);
     if (b) pop(b);
   }, { passive: false });
@@ -211,7 +219,7 @@
     for (let k = 0; k < 5; k++) burst(Math.random() * W, Math.random() * H, Math.ceil(n / 5), Math.random() * 360, 7 + i * 6);
     bubbles.forEach(b => { b.vx += (Math.random() - 0.5) * (4 + i * 10); b.vy += (Math.random() - 0.5) * (4 + i * 10); });
     rattle(i);
-    buzz(1 + Math.floor(i * 3), 80);
+    buzz(1 + Math.floor(i * 3), 80, 'shake');
     hue += 40;
   }
   function onMotion(e) {
@@ -361,7 +369,7 @@
   // ---------- start ----------
   document.getElementById('go').addEventListener('click', async () => {
     initAudio();
-    buzz(1);
+    buzz(1, 70, 'start');
     tone(SCALE[0], 0.5, 'triangle', 0.2);
     tone(SCALE[2], 0.5, 'triangle', 0.2, 0.12);
     tone(SCALE[4], 0.7, 'triangle', 0.2, 0.24);
