@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1b1464">
+<title>Baby Bubbles</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1b1464; overscroll-behavior: none; position: fixed; width: 100%; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+  #start { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; background: radial-gradient(circle at 50% 40%, #3a2a9e, #1b1464); z-index: 10; color: #fff; font-family: -apple-system, system-ui, sans-serif; text-align: center; padding: 24px; }
+  #go { width: 52vmin; height: 52vmin; border-radius: 50%; border: 0; background: conic-gradient(#ff5e5e, #ffd35e, #6bff7a, #5ee1ff, #8f6bff, #ff6bd6, #ff5e5e); box-shadow: 0 0 60px rgba(255,255,255,.35); animation: pulse 1.6s ease-in-out infinite; position: relative; }
+  #go::after { content: ""; position: absolute; left: 38%; top: 50%; transform: translateY(-50%); border-style: solid; border-width: 11vmin 0 11vmin 17vmin; border-color: transparent transparent transparent #fff; }
+  @keyframes pulse { 50% { transform: scale(1.08); } }
+  #start p { margin: 0; font-size: 15px; opacity: .8; max-width: 300px; line-height: 1.4; }
+  #hl { position: fixed; left: 0; top: 0; opacity: 0.01; pointer-events: none; transform: scale(0.1); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<label id="hl"><input type="checkbox" switch id="hs"></label>
+<div id="start">
+  <button id="go" aria-label="Start"></button>
+  <p>Grown-up: tap to start (this enables sound and motion). Turn off silent mode and keep a firm grip. Triple-click the side button for Guided Access to lock the screen.</p>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('c');
+  const ctx = cv.getContext('2d');
+  const hl = document.getElementById('hl');
+  let W, H, DPR;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 3);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * DPR; cv.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  addEventListener('resize', resize); resize();
+
+  // ---------- haptics ----------
+  let lastBuzz = 0;
+  function buzz(count = 1, gap = 70) {
+    const now = performance.now();
+    if (now - lastBuzz < 35) return;
+    lastBuzz = now;
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => {
+        try { hl.click(); } catch (e) {}
+        if (navigator.vibrate) navigator.vibrate(i === 0 ? 25 : 15);
+      }, i * gap);
+    }
+  }
+
+  // ---------- audio ----------
+  let ac = null, master = null;
+  const SCALE = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66, 1318.5];
+  function initAudio() {
+    try {
+      if (navigator.audioSession) navigator.audioSession.type = 'playback';
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      const comp = ac.createDynamicsCompressor();
+      master = ac.createGain(); master.gain.value = 0.7;
+      master.connect(comp); comp.connect(ac.destination);
+      if (ac.state === 'suspended') ac.resume();
+    } catch (e) { ac = null; }
+  }
+  function tone(freq, dur = 0.6, type = 'sine', vol = 0.22, delay = 0) {
+    if (!ac) return;
+    const t = ac.currentTime + delay;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + dur + 0.05);
+    const o2 = ac.createOscillator(), g2 = ac.createGain();
+    o2.type = 'sine'; o2.frequency.value = freq * 2;
+    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.exponentialRampToValueAtTime(vol * 0.3, t + 0.01);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.5);
+    o2.connect(g2); g2.connect(master);
+    o2.start(t); o2.stop(t + dur);
+  }
+  let noiseBuf = null;
+  function noise(delay, vol, freq) {
+    if (!ac) return;
+    if (!noiseBuf) {
+      noiseBuf = ac.createBuffer(1, ac.sampleRate * 0.1, ac.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const t = ac.currentTime + delay;
+    const s = ac.createBufferSource(); s.buffer = noiseBuf;
+    const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 1.5;
+    const g = ac.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+    s.connect(f); f.connect(g); g.connect(master);
+    s.start(t); s.stop(t + 0.1);
+  }
+  function rattle(i) {
+    const n = 4 + Math.floor(i * 6);
+    for (let k = 0; k < n; k++) noise(k * 0.045, 0.25 + i * 0.3, 2500 + Math.random() * 2500);
+    const base = Math.floor(Math.random() * 4);
+    for (let k = 0; k < 3; k++) tone(SCALE[base + k], 0.5, 'triangle', 0.14, 0.05 + k * 0.07);
+  }
+
+  // ---------- state ----------
+  const bubbles = [], parts = [], ripples = [];
+  const tilt = { x: 0, y: 0 };
+  let hue = 220, flash = 0, look = { x: W / 2, y: H / 2 };
+  let started = false;
+
+  function newBubble(fromBottom = false) {
+    const r = Math.min(W, H) * (0.1 + Math.random() * 0.1);
+    return {
+      x: r + Math.random() * (W - 2 * r),
+      y: fromBottom ? H + r + Math.random() * 100 : Math.random() * H,
+      r, vx: (Math.random() - 0.5) * 0.4, vy: -(0.3 + Math.random() * 0.5),
+      hue: Math.random() * 360, ph: Math.random() * 6.28
+    };
+  }
+  for (let i = 0; i < 8; i++) bubbles.push(newBubble());
+
+  function burst(x, y, n, h, speed = 5) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * 6.283, s = (0.4 + Math.random()) * speed;
+      parts.push({
+        x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 1,
+        life: 1, decay: 0.008 + Math.random() * 0.012,
+        hue: (h + Math.random() * 80 - 40 + 360) % 360,
+        size: 6 + Math.random() * 12, star: Math.random() < 0.6, rot: Math.random() * 6.28
+      });
+    }
+    if (parts.length > 900) parts.splice(0, parts.length - 900);
+  }
+  function ripple(x, y, h) { ripples.push({ x, y, r: 10, a: 0.8, hue: h }); }
+
+  function pop(b) {
+    const idx = bubbles.indexOf(b);
+    if (idx < 0) return;
+    bubbles.splice(idx, 1);
+    burst(b.x, b.y, 22, b.hue, 6);
+    ripple(b.x, b.y, b.hue);
+    tone(SCALE[Math.floor(Math.random() * SCALE.length)], 0.7, 'sine', 0.26);
+    buzz(1);
+    setTimeout(() => bubbles.push(newBubble(true)), 700);
+  }
+
+  // ---------- touch ----------
+  const pointers = new Map();
+  let lastNote = 0, lastTrailBuzz = 0;
+  function hitBubble(x, y) {
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i];
+      if (Math.hypot(b.x - x, b.y - y) < b.r * 1.15) return b;
+    }
+    return null;
+  }
+  cv.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    look = { x: e.clientX, y: e.clientY };
+    const b = hitBubble(e.clientX, e.clientY);
+    if (b) { pop(b); }
+    else {
+      const h = (e.clientX / W) * 360;
+      burst(e.clientX, e.clientY, 12, h, 4);
+      ripple(e.clientX, e.clientY, h);
+      const note = SCALE[Math.min(SCALE.length - 1, Math.floor((e.clientX / W) * SCALE.length))];
+      tone(note, 0.5, 'triangle', 0.22);
+      buzz(1);
+    }
+    hue += 15;
+  }, { passive: false });
+  cv.addEventListener('pointermove', e => {
+    if (!pointers.has(e.pointerId)) return;
+    e.preventDefault();
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    look = { x: e.clientX, y: e.clientY };
+    const h = (performance.now() / 5) % 360;
+    burst(e.clientX, e.clientY, 2, h, 1.6);
+    const now = performance.now();
+    if (now - lastNote > 130) {
+      lastNote = now;
+      const i = Math.min(SCALE.length - 1, Math.floor((e.clientX / W) * SCALE.length));
+      tone(SCALE[i] / 2 * (e.clientY < H / 2 ? 2 : 1), 0.35, 'sine', 0.12);
+    }
+    if (now - lastTrailBuzz > 160) { lastTrailBuzz = now; buzz(1); }
+    const b = hitBubble(e.clientX, e.clientY);
+    if (b) pop(b);
+  }, { passive: false });
+  const up = e => { pointers.delete(e.pointerId); };
+  cv.addEventListener('pointerup', up);
+  cv.addEventListener('pointercancel', up);
+  document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+  document.addEventListener('gesturestart', e => e.preventDefault());
+  document.addEventListener('contextmenu', e => e.preventDefault());
+
+  // ---------- shake + tilt ----------
+  let lastShake = 0;
+  function shake(i) {
+    flash = Math.max(flash, 0.25 + i * 0.5);
+    const n = 24 + Math.floor(i * 70);
+    for (let k = 0; k < 5; k++) burst(Math.random() * W, Math.random() * H, Math.ceil(n / 5), Math.random() * 360, 7 + i * 6);
+    bubbles.forEach(b => { b.vx += (Math.random() - 0.5) * (4 + i * 10); b.vy += (Math.random() - 0.5) * (4 + i * 10); });
+    rattle(i);
+    buzz(1 + Math.floor(i * 3), 80);
+    hue += 40;
+  }
+  function onMotion(e) {
+    const a = e.acceleration;
+    const g = e.accelerationIncludingGravity;
+    let m = 0;
+    if (a && (a.x !== null)) m = Math.hypot(a.x || 0, a.y || 0, a.z || 0);
+    else if (g) m = Math.abs(Math.hypot(g.x || 0, g.y || 0, g.z || 0) - 9.8);
+    const now = performance.now();
+    if (m > 5 && now - lastShake > 170) {
+      lastShake = now;
+      shake(Math.min(m / 30, 1));
+    }
+  }
+  function onOrient(e) {
+    if (e.gamma == null) return;
+    tilt.x = Math.max(-1, Math.min(1, e.gamma / 40));
+    tilt.y = Math.max(-1, Math.min(1, ((e.beta || 0) - 40) / 40));
+  }
+  async function enableMotion() {
+    try {
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+        const r = await DeviceMotionEvent.requestPermission();
+        if (r !== 'granted') return;
+      }
+      addEventListener('devicemotion', onMotion);
+      addEventListener('deviceorientation', onOrient);
+    } catch (e) {}
+  }
+
+  // ---------- drawing ----------
+  function star(x, y, r, rot) {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const rr = i % 2 ? r * 0.45 : r;
+      const a = rot + (i * Math.PI) / 5;
+      ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    ctx.closePath();
+  }
+  function drawBubble(b, t) {
+    const wob = 1 + Math.sin(t / 400 + b.ph) * 0.03;
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.scale(wob, 1 / wob);
+    // bear ears
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = `hsl(${b.hue},90%,55%)`;
+      ctx.beginPath(); ctx.arc(s * b.r * 0.72, -b.r * 0.72, b.r * 0.32, 0, 6.283); ctx.fill();
+      ctx.fillStyle = `hsl(${b.hue},100%,85%)`;
+      ctx.beginPath(); ctx.arc(s * b.r * 0.72, -b.r * 0.72, b.r * 0.17, 0, 6.283); ctx.fill();
+    }
+    const g = ctx.createRadialGradient(-b.r * 0.3, -b.r * 0.35, b.r * 0.1, 0, 0, b.r);
+    g.addColorStop(0, `hsla(${b.hue},100%,88%,.95)`);
+    g.addColorStop(1, `hsla(${b.hue},95%,60%,.85)`);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 0, b.r, 0, 6.283); ctx.fill();
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.stroke();
+    // face
+    const dx = look.x - b.x, dy = look.y - b.y, d = Math.hypot(dx, dy) || 1;
+    const ox = (dx / d) * b.r * 0.05, oy = (dy / d) * b.r * 0.05;
+    const blink = (Math.sin(t / 1300 + b.ph * 3) > 0.985) ? 0.15 : 1;
+    ctx.fillStyle = '#fff';
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.ellipse(s * b.r * 0.3, -b.r * 0.1, b.r * 0.17, b.r * 0.19 * blink, 0, 0, 6.283); ctx.fill();
+    }
+    ctx.fillStyle = '#222';
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.ellipse(s * b.r * 0.3 + ox, -b.r * 0.1 + oy, b.r * 0.08, b.r * 0.09 * blink, 0, 0, 6.283); ctx.fill();
+    }
+    // snout + nose
+    ctx.fillStyle = 'rgba(255,255,255,.8)';
+    ctx.beginPath(); ctx.ellipse(0, b.r * 0.3, b.r * 0.32, b.r * 0.24, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.ellipse(0, b.r * 0.2, b.r * 0.1, b.r * 0.07, 0, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = '#222'; ctx.lineWidth = Math.max(3, b.r * 0.05); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(0, b.r * 0.27, b.r * 0.14, 0.3, Math.PI - 0.3); ctx.stroke();
+    // highlight
+    ctx.fillStyle = 'rgba(255,255,255,.55)';
+    ctx.beginPath(); ctx.ellipse(-b.r * 0.5, -b.r * 0.55, b.r * 0.14, b.r * 0.08, -0.7, 0, 6.283); ctx.fill();
+    ctx.restore();
+  }
+
+  function frame(t) {
+    hue = (hue + 0.12) % 360;
+    const g = ctx.createLinearGradient(0, 0, W * 0.4, H);
+    g.addColorStop(0, `hsl(${hue},70%,28%)`);
+    g.addColorStop(1, `hsl(${(hue + 70) % 360},75%,42%)`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    // bubbles
+    for (const b of bubbles) {
+      b.vx += tilt.x * 0.06;
+      b.vy += tilt.y * 0.03;
+      b.vy -= 0.004;
+      b.vx *= 0.985; b.vy *= 0.985;
+      const minUp = -0.25;
+      if (Math.abs(tilt.x) < 0.1 && b.vy > minUp) b.vy += (minUp - b.vy) * 0.02;
+      b.x += b.vx; b.y += b.vy;
+      if (b.x < b.r) { b.x = b.r; b.vx = Math.abs(b.vx); }
+      if (b.x > W - b.r) { b.x = W - b.r; b.vx = -Math.abs(b.vx); }
+      if (b.y < -b.r * 1.2) { b.y = H + b.r; b.x = b.r + Math.random() * (W - 2 * b.r); b.vy = -0.4; }
+      if (b.y > H + b.r * 2) { b.y = H + b.r * 2; b.vy = -0.5; }
+    }
+    // soft bubble-bubble bounce
+    for (let i = 0; i < bubbles.length; i++) for (let j = i + 1; j < bubbles.length; j++) {
+      const a = bubbles[i], c = bubbles[j];
+      const dx = c.x - a.x, dy = c.y - a.y, d = Math.hypot(dx, dy), min = a.r + c.r;
+      if (d > 0 && d < min) {
+        const push = (min - d) * 0.02;
+        a.vx -= (dx / d) * push; a.vy -= (dy / d) * push;
+        c.vx += (dx / d) * push; c.vy += (dy / d) * push;
+      }
+    }
+    for (const b of bubbles) drawBubble(b, t);
+
+    // ripples
+    for (let i = ripples.length - 1; i >= 0; i--) {
+      const r = ripples[i];
+      r.r += 5; r.a -= 0.018;
+      if (r.a <= 0) { ripples.splice(i, 1); continue; }
+      ctx.strokeStyle = `hsla(${r.hue},100%,80%,${r.a})`; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, 6.283); ctx.stroke();
+    }
+    // particles
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      p.vy += 0.12 + tilt.y * 0.08; p.vx += tilt.x * 0.08;
+      p.x += p.vx; p.y += p.vy; p.vx *= 0.99; p.rot += 0.08;
+      p.life -= p.decay;
+      if (p.life <= 0 || p.y > H + 40 || p.y < -80) { parts.splice(i, 1); continue; }
+      ctx.fillStyle = `hsla(${p.hue},100%,70%,${p.life})`;
+      if (p.star) { star(p.x, p.y, p.size * p.life + 2, p.rot); ctx.fill(); }
+      else { ctx.beginPath(); ctx.arc(p.x, p.y, p.size * 0.5 * p.life + 1, 0, 6.283); ctx.fill(); }
+    }
+    // flash
+    if (flash > 0.01) {
+      ctx.fillStyle = `rgba(255,255,255,${flash * 0.6})`; ctx.fillRect(0, 0, W, H);
+      flash *= 0.9;
+    }
+    // keep a few sparkles drifting when idle
+    if (started && Math.random() < 0.05) burst(Math.random() * W, Math.random() * H, 1, Math.random() * 360, 0.5);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ---------- start ----------
+  document.getElementById('go').addEventListener('click', async () => {
+    initAudio();
+    buzz(1);
+    tone(SCALE[0], 0.5, 'triangle', 0.2);
+    tone(SCALE[2], 0.5, 'triangle', 0.2, 0.12);
+    tone(SCALE[4], 0.7, 'triangle', 0.2, 0.24);
+    const p = enableMotion();
+    try { if (navigator.wakeLock) navigator.wakeLock.request('screen'); } catch (e) {}
+    document.getElementById('start').style.display = 'none';
+    started = true;
+    await p;
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      try { if (started && navigator.wakeLock) navigator.wakeLock.request('screen'); } catch (e) {}
+      if (ac && ac.state === 'suspended') ac.resume();
+    }
+  });
+})();
+</script>
+</body>
+</html>
