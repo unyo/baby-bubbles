@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "Baby Bubbles",
+    "slug": "baby-bubbles",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#1b1464",
+    "ios": {
+      "supportsTablet": true,
+      "requireFullScreen": true
+    },
+    "plugins": [
+      "expo-status-bar"
+    ]
+  }
+}
