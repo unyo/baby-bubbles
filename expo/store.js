@@ -2,7 +2,7 @@
 // Create a Non-Consumable product with this exact ID in App Store Connect.
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 
-export const FRIENDS_SKU = 'com.unyo.babybubbles.friends';
+export const FRIENDS_SKU = 'com.unyo.chloesbubbles.friends';
 
 // Expo Go has no store module, so purchases only work in a real build.
 export const inExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;

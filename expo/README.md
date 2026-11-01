@@ -1,4 +1,4 @@
-# Baby Bubbles in Expo Go
+# Chloe's Bubbles (Expo app)
 
 Wraps `../index.html` in a WebView so the game gets real haptics from
 `expo-haptics` (the Taptic Engine on iPhone, the vibration motor on Android).
@@ -46,7 +46,7 @@ eas submit -p ios              # uploads to App Store Connect / TestFlight
 ```
 
 `npm install` (which EAS runs) embeds `../index.html` automatically, so the
-build always ships the current game. The bundle ID is `com.unyo.babybubbles`
+build always ships the current game. The bundle ID is `com.unyo.chloesbubbles`
 in `app.json`; change it before the first build if you want a different one.
 Build numbers increase automatically (`eas.json`).
 
@@ -60,7 +60,7 @@ In App Store Connect:
 
 1. Accept the Paid Apps agreement and fill in banking and tax info.
 2. Under the app, add an In-App Purchase of type **Non-Consumable** with
-   product ID `com.unyo.babybubbles.friends` (see `store.js`), a $4.99 price,
+   product ID `com.unyo.chloesbubbles.friends` (see `store.js`), a $4.99 price,
    a display name, and a review screenshot of the unlock screen.
 3. Attach the purchase to your first app version when you submit it.
 
@@ -68,3 +68,28 @@ To test purchases, use a TestFlight build or a development build
 (`eas build --profile preview`); Expo Go has no store. In Expo Go the unlock
 screen shows a "Preview animals" button instead so you can see them.
 In a browser, add `?friends=1` to the URL to preview the animals.
+
+## App Store submission checklist
+
+Legal and listing items, in the order App Store Connect asks for them:
+
+- **Name:** Chloe's Bubbles. Creating the app in App Store Connect reserves it.
+- **Privacy policy URL** and **support URL:** `docs/privacy.html` and
+  `docs/index.html`. Replace `SUPPORT_EMAIL` in both with a real address, then
+  host them anywhere public (GitHub Pages from `/docs`, Netlify drop, etc.).
+  The policy is also shown inside the app on the grown-up screen.
+- **App Privacy ("nutrition label"):** choose **Data Not Collected**. The app
+  has no analytics, ads, accounts or network calls, and
+  `app.json > ios.privacyManifests` declares no tracking.
+- **Age rating / Kids category:** answer "None" to every content question. If you
+  pick the Kids category (ages 5 and under), the rules it adds are already met:
+  no third-party analytics or ads, no links out, and purchases sit behind a
+  parental gate.
+- **Terms of use:** Apple's standard EULA covers this; no custom terms needed.
+- **Refunds:** handled by Apple (support page links to reportaproblem.apple.com).
+- **In-app purchase:** non-consumable `com.unyo.chloesbubbles.friends`, with
+  Restore Purchase in the app.
+- **Export compliance:** already answered in `app.json`
+  (`usesNonExemptEncryption: false`).
+- **Screenshots and description:** describe only what the app does; avoid
+  claims like "educational" or "improves development" unless you can back them.

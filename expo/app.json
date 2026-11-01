@@ -1,22 +1,35 @@
 {
   "expo": {
-    "name": "Baby Bubbles",
-    "slug": "baby-bubbles",
+    "name": "Chloe's Bubbles",
+    "slug": "chloes-bubbles",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#1b1464",
     "ios": {
-      "bundleIdentifier": "com.unyo.babybubbles",
+      "bundleIdentifier": "com.unyo.chloesbubbles",
       "supportsTablet": true,
       "requireFullScreen": true,
       "config": {
         "usesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyTracking": false,
+        "NSPrivacyTrackingDomains": [],
+        "NSPrivacyCollectedDataTypes": [],
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
+          }
+        ]
       }
     },
     "android": {
-      "package": "com.unyo.babybubbles",
+      "package": "com.unyo.chloesbubbles",
       "adaptiveIcon": {
         "foregroundImage": "./assets/splash-icon.png",
         "backgroundColor": "#1b1464"
