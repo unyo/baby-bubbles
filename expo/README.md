@@ -30,3 +30,22 @@ posts `{ type: 'haptic', kind, count, gap }` to native code, and `App.js` plays:
 
 In a normal browser the old fallback still runs (the iOS switch-click trick and
 `navigator.vibrate`).
+
+## Build for the App Store
+
+You need an Apple Developer account ($99/year) and a free Expo account. No Mac
+needed, EAS builds in the cloud.
+
+```sh
+npm i -g eas-cli
+cd expo
+eas login
+eas init                       # links this folder to an Expo project (one time)
+eas build -p ios --profile production
+eas submit -p ios              # uploads to App Store Connect / TestFlight
+```
+
+`npm install` (which EAS runs) embeds `../index.html` automatically, so the
+build always ships the current game. The bundle ID is `com.unyo.babybubbles`
+in `app.json`; change it before the first build if you want a different one.
+Build numbers increase automatically (`eas.json`).
