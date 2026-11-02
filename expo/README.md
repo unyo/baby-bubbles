@@ -74,8 +74,9 @@ In a browser, add `?friends=1` to the URL to preview the animals.
 Legal and listing items, in the order App Store Connect asks for them:
 
 - **Name:** Chloe's Bubbles. Creating the app in App Store Connect reserves it.
-- **Privacy policy URL** and **support URL:** `docs/privacy.html` and
-  `docs/index.html` (contact: cody.moniz@gmail.com). Host them anywhere public (GitHub Pages from `/docs`, Netlify drop, etc.).
+- **Privacy policy URL:** https://unyo.github.io/chloes-bubbles/docs/privacy.html
+- **Support URL:** https://unyo.github.io/chloes-bubbles/docs/
+  (both served by GitHub Pages from `docs/`; contact: cody.moniz@gmail.com).
   The policy is also shown inside the app on the grown-up screen.
 - **App Privacy ("nutrition label"):** choose **Data Not Collected**. The app
   has no analytics, ads, accounts or network calls, and
