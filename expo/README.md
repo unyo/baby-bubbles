@@ -75,8 +75,7 @@ Legal and listing items, in the order App Store Connect asks for them:
 
 - **Name:** Chloe's Bubbles. Creating the app in App Store Connect reserves it.
 - **Privacy policy URL** and **support URL:** `docs/privacy.html` and
-  `docs/index.html`. Replace `SUPPORT_EMAIL` in both with a real address, then
-  host them anywhere public (GitHub Pages from `/docs`, Netlify drop, etc.).
+  `docs/index.html` (contact: cody.moniz@gmail.com). Host them anywhere public (GitHub Pages from `/docs`, Netlify drop, etc.).
   The policy is also shown inside the app on the grown-up screen.
 - **App Privacy ("nutrition label"):** choose **Data Not Collected**. The app
   has no analytics, ads, accounts or network calls, and
